@@ -1,6 +1,7 @@
 // 安全提示：请勿在代码中直接暴露API密钥
 // 正确做法是使用环境变量或在本地测试后删除
-const OKEX_API_KEY = 'YOUR_API_KEY'; // 测试后请删除或使用环境变量
+const OKEX_API_KEY = '9f1bba1b-944f-4adf-aeb2-f469328d1c96
+'; // 测试后请删除或使用环境变量
 
 // 配置参数
 const CONFIG = {
