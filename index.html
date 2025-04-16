@@ -1,145 +1,85 @@
-// app.js
-const startBtn = document.getElementById('start-btn');
-const coinContainer = document.getElementById('coin-container');
-const alertContainer = document.getElementById('alert-container');
-const chartContainer = document.getElementById('tv-chart');
-const macdAlertCheckbox = document.getElementById('macd-alert');
-const kdjAlertCheckbox = document.getElementById('kdj-alert');
-const volumeAlertCheckbox = document.getElementById('volume-alert');
-const volumeRatioInput = document.getElementById('volume-ratio');
-
-// Initialize Lightweight Charts
-const chart = LightweightCharts.createChart(chartContainer, {
-    width: chartContainer.clientWidth,
-    height: 400,
-});
-const candleSeries = chart.addCandlestickSeries();
-
-// Fetch top 10 coins by volume
-async function fetchTopCoins() {
-    try {
-        const response = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT');
-        const data = await response.json();
-        if (data.code !== '0') throw new Error(data.msg);
-        return data.data
-            .sort((a, b) => parseFloat(b.vol24h) - parseFloat(a.vol24h)) // Sort by volume
-            .slice(0, 10); // Top 10
-    } catch (error) {
-        addAlert(`Error fetching coins: ${error.message}`);
-        return [];
-    }
-}
-
-// Fetch candlestick data for chart
-async function fetchCandles(instId, timeframe = '5m') {
-    try {
-        const response = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${timeframe}`);
-        const data = await response.json();
-        if (data.code !== '0') throw new Error(data.msg);
-        return data.data.map(candle => ({
-            time: parseInt(candle[0]) / 1000, // Timestamp to seconds
-            open: parseFloat(candle[1]),
-            high: parseFloat(candle[2]),
-            low: parseFloat(candle[3]),
-            close: parseFloat(candle[4]),
-            volume: parseFloat(candle[5]),
-        })).reverse(); // Reverse for chronological order
-    } catch (error) {
-        addAlert(`Error fetching candles: ${error.message}`);
-        return [];
-    }
-}
-
-// Render coin cards
-function renderCoins(coins) {
-    coinContainer.innerHTML = '';
-    coins.forEach(coin => {
-        const card = document.createElement('div');
-        card.className = 'coin-card';
-        card.textContent = coin.instId;
-        card.addEventListener('click', async () => {
-            const candles = await fetchCandles(coin.instId);
-            candleSeries.setData(candles);
-        });
-        coinContainer.appendChild(card);
-    });
-}
-
-// Add alert
-function addAlert(message) {
-    const alert = document.createElement('div');
-    alert.className = 'alert';
-    alert.textContent = message;
-    alertContainer.prepend(alert);
-}
-
-// Simple MACD calculation (placeholder)
-function calculateMACD(closes) {
-    // Implement MACD logic (EMA12, EMA26, Signal Line)
-    // Return true if golden cross detected
-    return Math.random() > 0.95; // Placeholder for demo
-}
-
-// WebSocket for real-time data
-function startWebSocket(coins) {
-    const ws = new WebSocket('wss://ws.okx.com:8443/ws/v5/public');
-    ws.onopen = () => {
-        ws.send(JSON.stringify({
-            op: 'subscribe',
-            args: coins.map(coin => ({
-                channel: 'tickers',
-                instId: coin.instId,
-            })),
-        }));
-    };
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.data && data.data[0]) {
-            const ticker = data.data[0];
-            const instId = ticker.instId;
-            const volume = parseFloat(ticker.vol24h);
-            const price = parseFloat(ticker.last);
-
-            // Check volume spike
-            if (volumeAlertCheckbox.checked) {
-                const volumeRatio = volumeRatioInput.value;
-                // Compare with historical volume (requires additional data)
-                if (volume > 1000000 * volumeRatio) { // Placeholder threshold
-                    addAlert(`Volume Spike: ${instId} (Ratio > ${volumeRatio}x)`);
-                }
-            }
-
-            // Check MACD (requires price history)
-            if (macdAlertCheckbox.checked && calculateMACD([price])) {
-                addAlert(`MACD Golden Cross: ${instId}`);
-            }
-
-            // Check KDJ (implement similarly)
-            if (kdjAlertCheckbox.checked) {
-                // Implement KDJ logic
-                if (Math.random() > 0.95) { // Placeholder
-                    addAlert(`KDJ Golden Cross: ${instId}`);
-                }
-            }
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>币圈短线预警助手</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-    };
-    ws.onerror = (error) => addAlert(`WebSocket error: ${error.message}`);
-    ws.onclose = () => addAlert('WebSocket closed');
-}
+        .coin-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .coin-card {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .alert {
+            animation: flash 1s infinite;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            background: #ffebee;
+        }
+        @keyframes flash {
+            0%,100% { opacity: 1; }
+            50% { opacity: 0.5; background: #ffcdd2; }
+        }
+        #tv-chart {
+            height: 400px;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+        }
+        .settings-panel {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>💰 币圈短线预警助手</h1>
+    
+    <div class="settings-panel">
+        <h3>⚙️ 预警设置</h3>
+        <div>
+            <label>
+                <input type="checkbox" id="macd-alert" checked> MACD金叉
+            </label>
+            <label>
+                <input type="checkbox" id="kdj-alert" checked> KDJ金叉
+            </label>
+            <label>
+                <input type="checkbox" id="volume-alert" checked> 放量预警 (量比 > 
+                <input type="number" id="volume-ratio" value="1.5" step="0.1" min="1" style="width: 50px;">倍
+            </label>
+        </div>
+        <button id="start-btn">🚀 开始监控</button>
+    </div>
 
-// Start monitoring
-startBtn.addEventListener('click', async () => {
-    const coins = await fetchTopCoins();
-    if (coins.length === 0) return;
-    renderCoins(coins);
-    startWebSocket(coins);
+    <div id="tv-chart"></div>
+    
+    <h3>📊 监控币种 (欧易交易量TOP10)</h3>
+    <div class="coin-list" id="coin-container"></div>
+    
+    <h3>🔔 实时警报</h3>
+    <div id="alert-container"></div>
 
-    // Load chart for first coin by default
-    const candles = await fetchCandles(coins[0].instId);
-    candleSeries.setData(candles);
-});
-
-// Handle window resize for chart
-window.addEventListener('resize', () => {
-    chart.resize(chartContainer.clientWidth, 400);
-});
+    <!-- 引入必要的JS库 -->
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
