@@ -4,23 +4,34 @@ const OKEX_API_KEY = '9f1bba1b-944f-4adf-aeb2-f469328d1c96'; // 测试后请删�
 
 // 配置参数
 const CONFIG = {
-    checkInterval: 10000, // 10秒检查一次
-    volumePeriod: 20,     // 成交量计算周期
-    coins: ['BTC-USDT', 'ETH-USDT'] // 只监控BTC和ETH
+    checkInterval: 1000, // 1秒检查一次
+    volumePeriod: 20,    // 成交量计算周期
+    coins: ['BTC-USDT', 'ETH-USDT'],
+    timeFormat: 'HH:mm:ss',
+    maxAlerts: 20,       // 最大显示警报数量
+    apiLimit: 30         // API每分钟调用限制
 };
 
 // 全局变量
 let alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2593/2593-preview.mp3');
 let chart = null;
 let currentSymbol = CONFIG.coins[0];
+let lastUpdateTime = null;
+let monitoringInterval = null;
+let apiCallCount = 0;
+let apiLimitResetTime = Date.now() + 60000;
 
 // 初始化函数
 async function init() {
-    updateCoinCards();
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 50); // 50ms更新一次时间显示
+    
+    setupCoinCards();
     document.getElementById('start-btn').addEventListener('click', startMonitoring);
+    document.getElementById('stop-btn').addEventListener('click', stopMonitoring);
     
     // 请求通知权限
-    if ('Notification' in window) {
+    if ('Notification' in window && Notification.permission !== 'granted') {
         Notification.requestPermission();
     }
     
@@ -28,29 +39,40 @@ async function init() {
     showChart(currentSymbol);
 }
 
-// 更新币种卡片信息
-async function updateCoinCards() {
-    try {
-        const response = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT');
-        const data = await response.json();
-        
-        CONFIG.coins.forEach(symbol => {
-            const coin = data.data.find(item => item.instId === symbol);
-            if (coin) {
-                const card = document.querySelector(`.coin-card[data-symbol="${symbol}"]`);
-                if (card) {
-                    const changePercent = (parseFloat(coin.last) / parseFloat(coin.open24h) - 1) * 100;
-                    const changeColor = changePercent >= 0 ? '#4CAF50' : '#F44336';
-                    
-                    card.querySelector('.price').textContent = `价格: ${coin.last}`;
-                    card.querySelector('.change').innerHTML = 
-                        `24H变化: <span style="color:${changeColor}">${changePercent.toFixed(2)}%</span>`;
-                }
-            }
+// 设置币种卡片事件
+function setupCoinCards() {
+    document.querySelectorAll('.coin-card').forEach(card => {
+        card.addEventListener('click', function() {
+            document.querySelectorAll('.coin-card').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            showChart(this.dataset.symbol);
         });
-    } catch (error) {
-        console.error('更新币种信息失败:', error);
+    });
+    document.querySelector('.coin-card').classList.add('active');
+}
+
+// 更新当前时间显示（精确到毫秒）
+function updateCurrentTime() {
+    const now = new Date();
+    const timeStr = formatTime(now, CONFIG.timeFormat) + `.${now.getMilliseconds().toString().padStart(3, '0')}`;
+    document.getElementById('current-time').textContent = timeStr;
+    
+    if (lastUpdateTime) {
+        const updateStr = formatTime(lastUpdateTime, CONFIG.timeFormat);
+        document.getElementById('last-update').textContent = `上次更新: ${updateStr}`;
     }
+}
+
+// 时间格式化函数
+function formatTime(date, format) {
+    const pad = (n) => n.toString().padStart(2, '0');
+    return format
+        .replace('YYYY', date.getFullYear())
+        .replace('MM', pad(date.getMonth() + 1))
+        .replace('DD', pad(date.getDate()))
+        .replace('HH', pad(date.getHours()))
+        .replace('mm', pad(date.getMinutes()))
+        .replace('ss', pad(date.getSeconds()));
 }
 
 // 显示K线图表
@@ -61,23 +83,33 @@ function showChart(symbol) {
     
     chart = LightweightCharts.createChart(chartContainer, {
         width: chartContainer.clientWidth,
-        height: 450,
+        height: 500,
         layout: {
-            backgroundColor: '#252525',
+            backgroundColor: '#1e1e1e',
             textColor: '#e0e0e0',
         },
         grid: {
-            vertLines: { color: '#444' },
-            horzLines: { color: '#444' },
+            vertLines: { color: '#333' },
+            horzLines: { color: '#333' },
         },
         crosshair: {
             mode: LightweightCharts.CrosshairMode.Normal,
+            vertLine: {
+                color: '#666',
+                labelBackgroundColor: '#444',
+            },
+            horzLine: {
+                color: '#666',
+                labelBackgroundColor: '#444',
+            },
         },
         priceScale: {
-            borderColor: '#444',
+            borderColor: '#333',
         },
         timeScale: {
-            borderColor: '#444',
+            borderColor: '#333',
+            timeVisible: true,
+            secondsVisible: true,
         },
     });
     
@@ -96,22 +128,45 @@ function showChart(symbol) {
 
 // 加载图表数据
 async function loadChartData(symbol, candleSeries) {
+    if (apiCallCount >= CONFIG.apiLimit) {
+        const now = Date.now();
+        if (now < apiLimitResetTime) {
+            console.warn(`API调用已达限制 (${CONFIG.apiLimit}/分钟)，等待重置...`);
+            return;
+        } else {
+            apiCallCount = 0;
+            apiLimitResetTime = now + 60000;
+        }
+    }
+    
     try {
-        const response = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${symbol}&bar=15m&limit=100`);
+        apiCallCount++;
+        const response = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${symbol}&bar=1m&limit=100`);
         const data = await response.json();
+        
+        if (!data.data) {
+            console.error('API返回数据异常:', data);
+            return;
+        }
         
         const candles = data.data.map(item => ({
             time: parseInt(item[0]) / 1000,
             open: parseFloat(item[1]),
             high: parseFloat(item[2]),
             low: parseFloat(item[3]),
-            close: parseFloat(item[4])
+            close: parseFloat(item[4]),
+            volume: parseFloat(item[5])
         })).reverse();
         
         candleSeries.setData(candles);
+        lastUpdateTime = new Date();
+        updateCurrentTime();
         
         // 添加均线
         addMovingAverages(candles);
+        
+        // 更新币种卡片数据
+        updateCoinCard(symbol, candles[candles.length - 1].close);
     } catch (error) {
         console.error('加载K线数据失败:', error);
     }
@@ -121,11 +176,18 @@ async function loadChartData(symbol, candleSeries) {
 function addMovingAverages(candles) {
     const closes = candles.map(c => c.close);
     
+    // 移除旧均线
+    chart.removeSeries(chart._series[1]);
+    chart.removeSeries(chart._series[1]);
+    
     // 7周期均线
     const ma7 = calculateMA(closes, 7);
     const ma7Series = chart.addLineSeries({
         color: '#FF9800',
         lineWidth: 2,
+        lineStyle: 0, // 0 = 实线
+        crosshairMarkerVisible: true,
+        crosshairMarkerRadius: 4,
     });
     ma7Series.setData(closes.map((_, i) => ({ time: candles[i].time, value: ma7[i] })));
     
@@ -134,8 +196,50 @@ function addMovingAverages(candles) {
     const ma14Series = chart.addLineSeries({
         color: '#2196F3',
         lineWidth: 2,
+        lineStyle: 0,
+        crosshairMarkerVisible: true,
+        crosshairMarkerRadius: 4,
     });
     ma14Series.setData(closes.map((_, i) => ({ time: candles[i].time, value: ma14[i] })));
+}
+
+// 更新币种卡片信息
+function updateCoinCard(symbol, price) {
+    const card = document.querySelector(`.coin-card[data-symbol="${symbol}"]`);
+    if (!card) return;
+    
+    const priceElement = card.querySelector('.price');
+    const changeElement = card.querySelector('.change');
+    const volumeElement = card.querySelector('.volume');
+    
+    // 价格变化动画
+    const oldPrice = parseFloat(priceElement.textContent.replace('价格: ', '')) || price;
+    const isUp = price > oldPrice;
+    
+    if (priceElement.textContent !== '价格: -') {
+        priceElement.style.color = isUp ? '#4CAF50' : '#F44336';
+        setTimeout(() => {
+            priceElement.style.color = '#e0e0e0';
+        }, 1000);
+    }
+    
+    priceElement.textContent = `价格: ${price.toFixed(2)}`;
+    
+    // 获取24小时变化数据
+    fetch(`https://www.okx.com/api/v5/market/ticker?instId=${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.data && data.data[0]) {
+                const ticker = data.data[0];
+                const changePercent = (parseFloat(ticker.last) / parseFloat(ticker.open24h) - 1) * 100;
+                const changeColor = changePercent >= 0 ? '#4CAF50' : '#F44336';
+                const changeText = changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`;
+                
+                changeElement.innerHTML = `24H变化: <span style="color:${changeColor}">${changeText}</span>`;
+                volumeElement.textContent = `成交量: ${(ticker.vol24h / 1000).toFixed(1)}K`;
+            }
+        })
+        .catch(error => console.error('获取24小时数据失败:', error));
 }
 
 // 开始监控
@@ -150,8 +254,19 @@ function startMonitoring() {
     // 清空现有警报
     document.getElementById('alert-container').innerHTML = '';
     
-    // 设置定时检查
-    setInterval(() => {
+    // 更新UI状态
+    document.getElementById('start-btn').style.display = 'none';
+    document.getElementById('stop-btn').style.display = 'block';
+    document.getElementById('system-status').innerHTML = 
+        '<span class="status-indicator status-active"></span>系统状态: 运行中';
+    
+    // 立即执行一次检查
+    checkAllAlerts();
+    
+    // 设置定时检查（每秒一次）
+    monitoringInterval = setInterval(checkAllAlerts, CONFIG.checkInterval);
+    
+    function checkAllAlerts() {
         CONFIG.coins.forEach(symbol => {
             checkAlerts(
                 symbol, 
@@ -163,8 +278,27 @@ function startMonitoring() {
                 volumeShrinkRatio
             );
         });
-        updateCoinCards(); // 更新价格信息
-    }, CONFIG.checkInterval);
+        
+        // 每分钟重置API计数器
+        if (Date.now() >= apiLimitResetTime) {
+            apiCallCount = 0;
+            apiLimitResetTime = Date.now() + 60000;
+        }
+    }
+}
+
+// 停止监控
+function stopMonitoring() {
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        monitoringInterval = null;
+        
+        // 更新UI状态
+        document.getElementById('start-btn').style.display = 'block';
+        document.getElementById('stop-btn').style.display = 'none';
+        document.getElementById('system-status').innerHTML = 
+            '<span class="status-indicator status-inactive"></span>系统状态: 已停止';
+    }
 }
 
 // 检查各种警报条件
@@ -178,7 +312,7 @@ async function checkAlerts(
     volumeShrinkRatio
 ) {
     try {
-        const response = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${symbol}&bar=1H&limit=50`);
+        const response = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${symbol}&bar=1m&limit=50`);
         const klines = await response.json();
         
         if (!klines.data || klines.data.length < CONFIG.volumePeriod + 2) return;
@@ -235,26 +369,47 @@ async function checkAlerts(
 
 // 触发警报
 function triggerAlert(symbol, message, alertType) {
-    const alertText = `[${new Date().toLocaleTimeString()}] ${symbol.replace('-', '/')} ${message}`;
-    console.log('警报:', alertText);
+    const now = new Date();
+    const timeStr = formatTime(now, 'HH:mm:ss') + `.${now.getMilliseconds().toString().padStart(3, '0')}`;
+    const alertText = `[${timeStr}] ${symbol.replace('-', '/')} ${message}`;
     
     // 页面显示警报
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert ${alertType}`;
     alertDiv.textContent = alertText;
-    document.getElementById('alert-container').prepend(alertDiv);
+    const container = document.getElementById('alert-container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // 保持最多显示警报数量
+    const alerts = document.querySelectorAll('#alert-container .alert');
+    if (alerts.length > CONFIG.maxAlerts) {
+        alerts[alerts.length - 1].remove();
+    }
     
     // 播放声音
-    alertSound.play();
+    alertSound.currentTime = 0;
+    alertSound.play().catch(e => console.log('声音播放被阻止:', e));
     
     // 浏览器通知
     if (Notification.permission === 'granted') {
-        new Notification(`📢 ${symbol} 警报`, { body: message });
+        new Notification(`📢 ${symbol} 警报`, { 
+            body: message,
+            icon: 'https://static.okx.com/cdn/assets/imgs/2212/7A9BAF6E5D8C1E13.png',
+            timestamp: now.getTime()
+        });
     }
     
     // 手机震动
     if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200]);
+        navigator.vibrate([100, 50, 100]);
+    }
+    
+    // 币种卡片闪烁提醒
+    const card = document.querySelector(`.coin-card[data-symbol="${symbol}"]`);
+    if (card) {
+        card.style.animation = 'none';
+        void card.offsetWidth; // 触发重绘
+        card.style.animation = 'flash 1s 2';
     }
 }
 
@@ -352,3 +507,13 @@ function calculateLowest(data, period) {
 
 // 初始化应用
 document.addEventListener('DOMContentLoaded', init);
+
+// 添加CSS动画
+const style = document.createElement('style');
+style.textContent = `
+@keyframes flash {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 rgba(33, 150, 243, 0); }
+    50% { opacity: 0.7; box-shadow: 0 0 15px rgba(33, 150, 243, 0.7); }
+}
+`;
+document.head.appendChild(style);
