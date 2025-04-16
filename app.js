@@ -1,3 +1,5 @@
+// 在 app.js 顶部添加（仅本地开发使用）
+const OKEX_API_KEY = '9f1bba1b-944f-4adf-aeb2-f469328d1c96'; // 用完立即删除
 // 配置参数
 const CONFIG = {
     checkInterval: 10000, // 10秒检查一次
