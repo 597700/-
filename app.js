@@ -1,58 +1,55 @@
-// 在 app.js 顶部添加（仅本地开发使用）
-const OKEX_API_KEY = '9f1bba1b-944f-4adf-aeb2-f469328d1c96'; // 用完立即删除
+// 安全提示：请勿在代码中直接暴露API密钥
+// 正确做法是使用环境变量或在本地测试后删除
+const OKEX_API_KEY = 'YOUR_API_KEY'; // 测试后请删除或使用环境变量
+
 // 配置参数
 const CONFIG = {
     checkInterval: 10000, // 10秒检查一次
     volumePeriod: 20,     // 成交量计算周期
-    topCoins: 10          // 监控前10大币种
+    coins: ['BTC-USDT', 'ETH-USDT'] // 只监控BTC和ETH
 };
 
 // 全局变量
 let alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2593/2593-preview.mp3');
 let chart = null;
-let currentSymbol = 'BTC-USDT';
+let currentSymbol = CONFIG.coins[0];
 
 // 初始化函数
 async function init() {
-    loadCoinList();
+    updateCoinCards();
     document.getElementById('start-btn').addEventListener('click', startMonitoring);
     
     // 请求通知权限
     if ('Notification' in window) {
         Notification.requestPermission();
     }
+    
+    // 默认显示BTC图表
+    showChart(currentSymbol);
 }
 
-// 加载币种列表
-async function loadCoinList() {
+// 更新币种卡片信息
+async function updateCoinCards() {
     try {
         const response = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT');
         const data = await response.json();
-        const coins = data.data
-            .sort((a, b) => b.vol24h - a.vol24h)
-            .slice(0, CONFIG.topCoins);
         
-        const container = document.getElementById('coin-container');
-        container.innerHTML = '';
-        
-        coins.forEach(coin => {
-            const coinCard = document.createElement('div');
-            coinCard.className = 'coin-card';
-            coinCard.innerHTML = `
-                <strong>${coin.instId.replace('-', '/')}</strong>
-                <div>24H量: ${(coin.vol24h/10000).toFixed(1)}万</div>
-                <div>最新价: ${coin.last}</div>
-            `;
-            coinCard.addEventListener('click', () => showChart(coin.instId));
-            container.appendChild(coinCard);
+        CONFIG.coins.forEach(symbol => {
+            const coin = data.data.find(item => item.instId === symbol);
+            if (coin) {
+                const card = document.querySelector(`.coin-card[data-symbol="${symbol}"]`);
+                if (card) {
+                    const changePercent = (parseFloat(coin.last) / parseFloat(coin.open24h) - 1) * 100;
+                    const changeColor = changePercent >= 0 ? '#4CAF50' : '#F44336';
+                    
+                    card.querySelector('.price').textContent = `价格: ${coin.last}`;
+                    card.querySelector('.change').innerHTML = 
+                        `24H变化: <span style="color:${changeColor}">${changePercent.toFixed(2)}%</span>`;
+                }
+            }
         });
-        
-        // 默认显示第一个币种的图表
-        if (coins.length > 0) {
-            showChart(coins[0].instId);
-        }
     } catch (error) {
-        console.error('加载币种列表失败:', error);
+        console.error('更新币种信息失败:', error);
     }
 }
 
@@ -64,18 +61,34 @@ function showChart(symbol) {
     
     chart = LightweightCharts.createChart(chartContainer, {
         width: chartContainer.clientWidth,
-        height: 400,
+        height: 450,
         layout: {
-            backgroundColor: '#ffffff',
-            textColor: '#333',
+            backgroundColor: '#252525',
+            textColor: '#e0e0e0',
         },
         grid: {
-            vertLines: { color: '#eee' },
-            horzLines: { color: '#eee' },
+            vertLines: { color: '#444' },
+            horzLines: { color: '#444' },
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+        },
+        priceScale: {
+            borderColor: '#444',
+        },
+        timeScale: {
+            borderColor: '#444',
         },
     });
     
-    const candleSeries = chart.addCandlestickSeries();
+    const candleSeries = chart.addCandlestickSeries({
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+        borderDownColor: '#ef5350',
+        borderUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+    });
     
     // 加载K线数据
     loadChartData(symbol, candleSeries);
@@ -96,35 +109,74 @@ async function loadChartData(symbol, candleSeries) {
         })).reverse();
         
         candleSeries.setData(candles);
+        
+        // 添加均线
+        addMovingAverages(candles);
     } catch (error) {
         console.error('加载K线数据失败:', error);
     }
 }
 
+// 添加均线指标
+function addMovingAverages(candles) {
+    const closes = candles.map(c => c.close);
+    
+    // 7周期均线
+    const ma7 = calculateMA(closes, 7);
+    const ma7Series = chart.addLineSeries({
+        color: '#FF9800',
+        lineWidth: 2,
+    });
+    ma7Series.setData(closes.map((_, i) => ({ time: candles[i].time, value: ma7[i] })));
+    
+    // 14周期均线
+    const ma14 = calculateMA(closes, 14);
+    const ma14Series = chart.addLineSeries({
+        color: '#2196F3',
+        lineWidth: 2,
+    });
+    ma14Series.setData(closes.map((_, i) => ({ time: candles[i].time, value: ma14[i] })));
+}
+
 // 开始监控
 function startMonitoring() {
-    const macdAlert = document.getElementById('macd-alert').checked;
-    const kdjAlert = document.getElementById('kdj-alert').checked;
-    const volumeAlert = document.getElementById('volume-alert').checked;
-    const volumeRatio = parseFloat(document.getElementById('volume-ratio').value);
+    const goldenCrossAlert = document.getElementById('golden-cross-alert').checked;
+    const deathCrossAlert = document.getElementById('death-cross-alert').checked;
+    const volumeSpikeAlert = document.getElementById('volume-spike-alert').checked;
+    const volumeShrinkAlert = document.getElementById('volume-shrink-alert').checked;
+    const volumeSpikeRatio = parseFloat(document.getElementById('volume-spike-ratio').value);
+    const volumeShrinkRatio = parseFloat(document.getElementById('volume-shrink-ratio').value);
     
     // 清空现有警报
     document.getElementById('alert-container').innerHTML = '';
     
-    // 获取监控币种列表
-    const coins = Array.from(document.querySelectorAll('.coin-card strong'))
-        .map(el => el.textContent.replace('/', '-'));
-    
     // 设置定时检查
     setInterval(() => {
-        coins.forEach(symbol => {
-            checkAlerts(symbol, macdAlert, kdjAlert, volumeAlert, volumeRatio);
+        CONFIG.coins.forEach(symbol => {
+            checkAlerts(
+                symbol, 
+                goldenCrossAlert, 
+                deathCrossAlert, 
+                volumeSpikeAlert, 
+                volumeShrinkAlert,
+                volumeSpikeRatio,
+                volumeShrinkRatio
+            );
         });
+        updateCoinCards(); // 更新价格信息
     }, CONFIG.checkInterval);
 }
 
 // 检查各种警报条件
-async function checkAlerts(symbol, checkMACD, checkKDJ, checkVolume, volumeRatio) {
+async function checkAlerts(
+    symbol, 
+    checkGoldenCross, 
+    checkDeathCross, 
+    checkVolumeSpike, 
+    checkVolumeShrink,
+    volumeSpikeRatio,
+    volumeShrinkRatio
+) {
     try {
         const response = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${symbol}&bar=1H&limit=50`);
         const klines = await response.json();
@@ -137,30 +189,44 @@ async function checkAlerts(symbol, checkMACD, checkKDJ, checkVolume, volumeRatio
         const lows = klines.data.map(k => parseFloat(k[3]));
         const volumes = klines.data.map(k => parseFloat(k[5]));
         
-        // MACD金叉检测
-        if (checkMACD) {
-            const macdData = calculateMACD(closes);
-            if (isGoldenCross(macdData.MACD, macdData.signal)) {
-                triggerAlert(symbol, 'MACD金叉信号出现!');
-            }
+        // MACD计算
+        const macdData = calculateMACD(closes);
+        
+        // 金叉检测
+        if (checkGoldenCross && isGoldenCross(macdData.MACD, macdData.signal)) {
+            triggerAlert(symbol, 'MACD金叉信号出现!', 'golden-cross');
         }
         
-        // KDJ金叉检测
-        if (checkKDJ) {
-            const kdjData = calculateKDJ(highs, lows, closes);
-            if (isGoldenCross(kdjData.K, kdjData.D)) {
-                triggerAlert(symbol, 'KDJ金叉信号出现!');
-            }
+        // 死叉检测
+        if (checkDeathCross && isDeathCross(macdData.MACD, macdData.signal)) {
+            triggerAlert(symbol, 'MACD死叉信号出现!', 'death-cross');
         }
+        
+        // 均线交叉检测
+        const ma7 = calculateMA(closes, 7);
+        const ma14 = calculateMA(closes, 14);
+        
+        if (checkGoldenCross && isGoldenCross(ma7, ma14)) {
+            triggerAlert(symbol, 'MA7上穿MA14金叉!', 'golden-cross');
+        }
+        
+        if (checkDeathCross && isDeathCross(ma7, ma14)) {
+            triggerAlert(symbol, 'MA7下穿MA14死叉!', 'death-cross');
+        }
+        
+        // 成交量分析
+        const avgVolume = calculateAverageVolume(volumes);
+        const currentVolume = volumes[volumes.length - 1];
+        const volumeRatio = currentVolume / avgVolume;
         
         // 放量检测
-        if (checkVolume) {
-            const avgVolume = calculateAverageVolume(volumes);
-            const currentVolume = volumes[volumes.length - 1];
-            if (currentVolume > avgVolume * volumeRatio) {
-                const ratio = (currentVolume / avgVolume).toFixed(1);
-                triggerAlert(symbol, `放量上涨! 量比 ${ratio}倍`);
-            }
+        if (checkVolumeSpike && volumeRatio > volumeSpikeRatio) {
+            triggerAlert(symbol, `放量上涨! 量比 ${volumeRatio.toFixed(1)}倍`, 'volume-spike');
+        }
+        
+        // 缩量检测
+        if (checkVolumeShrink && volumeRatio < volumeShrinkRatio) {
+            triggerAlert(symbol, `缩量下跌! 量比 ${volumeRatio.toFixed(1)}倍`, 'volume-shrink');
         }
     } catch (error) {
         console.error(`检查${symbol}警报失败:`, error);
@@ -168,13 +234,13 @@ async function checkAlerts(symbol, checkMACD, checkKDJ, checkVolume, volumeRatio
 }
 
 // 触发警报
-function triggerAlert(symbol, message) {
+function triggerAlert(symbol, message, alertType) {
     const alertText = `[${new Date().toLocaleTimeString()}] ${symbol.replace('-', '/')} ${message}`;
     console.log('警报:', alertText);
     
     // 页面显示警报
     const alertDiv = document.createElement('div');
-    alertDiv.className = 'alert';
+    alertDiv.className = `alert ${alertType}`;
     alertDiv.textContent = alertText;
     document.getElementById('alert-container').prepend(alertDiv);
     
@@ -194,7 +260,6 @@ function triggerAlert(symbol, message) {
 
 // ================= 指标计算函数 =================
 function calculateMACD(closes, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
-    // 简化版MACD计算
     const fastEMA = calculateEMA(closes, fastPeriod);
     const slowEMA = calculateEMA(closes, slowPeriod);
     const MACD = fastEMA.map((val, idx) => val - slowEMA[idx]);
@@ -203,7 +268,6 @@ function calculateMACD(closes, fastPeriod = 12, slowPeriod = 26, signalPeriod = 
 }
 
 function calculateKDJ(highs, lows, closes, n = 9) {
-    // 简化版KDJ计算
     const lowestLows = calculateLowest(lows, n);
     const highestHighs = calculateHighest(highs, n);
     
@@ -221,10 +285,37 @@ function calculateKDJ(highs, lows, closes, n = 9) {
     return { K, D, J };
 }
 
+function calculateMA(data, period) {
+    return data.map((_, idx) => {
+        if (idx < period - 1) return null;
+        const sum = data.slice(idx - period + 1, idx + 1).reduce((a, b) => a + b, 0);
+        return sum / period;
+    }).filter(val => val !== null);
+}
+
 function calculateAverageVolume(volumes) {
     const period = Math.min(CONFIG.volumePeriod, volumes.length - 1);
     const recentVolumes = volumes.slice(-period - 1, -1);
     return recentVolumes.reduce((sum, vol) => sum + vol, 0) / period;
+}
+
+// ================= 交叉检测函数 =================
+function isGoldenCross(line1, line2) {
+    if (line1.length < 2 || line2.length < 2) return false;
+    const prev1 = line1[line1.length - 2];
+    const curr1 = line1[line1.length - 1];
+    const prev2 = line2[line2.length - 2];
+    const curr2 = line2[line2.length - 1];
+    return prev1 < prev2 && curr1 > curr2;
+}
+
+function isDeathCross(line1, line2) {
+    if (line1.length < 2 || line2.length < 2) return false;
+    const prev1 = line1[line1.length - 2];
+    const curr1 = line1[line1.length - 1];
+    const prev2 = line2[line2.length - 2];
+    const curr2 = line2[line2.length - 1];
+    return prev1 > prev2 && curr1 < curr2;
 }
 
 // ================= 辅助计算函数 =================
@@ -257,15 +348,6 @@ function calculateLowest(data, period) {
         const start = Math.max(0, idx - period + 1);
         return Math.min(...data.slice(start, idx + 1));
     });
-}
-
-function isGoldenCross(line1, line2) {
-    if (line1.length < 2 || line2.length < 2) return false;
-    const prev1 = line1[line1.length - 2];
-    const curr1 = line1[line1.length - 1];
-    const prev2 = line2[line2.length - 2];
-    const curr2 = line2[line2.length - 1];
-    return prev1 < prev2 && curr1 > curr2;
 }
 
 // 初始化应用
