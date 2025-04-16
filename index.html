@@ -120,7 +120,25 @@
             background: #252525;
             padding: 15px;
             border-radius: 8px;
-        }
+        }  
+        <!-- 在原有HTML基础上添加时间显示 -->
+         <div class="time-display">
+         <span id="current-time">--:--:--</span>
+         <span id="last-update">上次更新: --:--:--</span>
+         </div>
+
+         <style>
+       .time-display {
+          background: #333;
+         color: #fff;
+         padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        display: flex;
+        justify-content: space-between;
+       font-family: monospace;
+   }
+</style>
     </style>
 </head>
 <body>
