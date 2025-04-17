@@ -13,38 +13,159 @@
       }
       h1 {
         color: #0ff;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .dashboard {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
       }
       .metrics {
-        margin-top: 20px;
-        font-size: 1.2em;
-        line-height: 1.8em;
+        background-color: #222;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+      }
+      .metric-item {
+        margin: 15px 0;
+        font-size: 1.1em;
+        display: flex;
+        justify-content: space-between;
+      }
+      .metric-value {
+        font-weight: bold;
+      }
+      .positive {
+        color: #0f0;
+      }
+      .negative {
+        color: #f00;
       }
       .alert {
         color: #f00;
         font-weight: bold;
         margin-top: 30px;
+        text-align: center;
+        font-size: 1.3em;
+        animation: blink 1s infinite;
+      }
+      @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+      }
+      .price-display {
+        font-size: 2em;
+        text-align: center;
+        margin: 20px 0;
       }
     </style>
   </head>
   <body>
-    <h1>ETH 实时预警系统</h1>
-    <div class="metrics">
-      <div>当前时间：<span id="time">--:--:--</span></div>
-      <div>当前成交量：<span id="volume">--</span></div>
-      <div>平均成交量（20根K线）：<span id="avgVolume">--</span></div>
-      <div>MACD 金叉：<span id="macd">--</span></div>
-      <div>KDJ 金叉：<span id="kdj">--</span></div>
-      <div>是否放量：<span id="volumeSpike">--</span></div>
+    <h1>ETH/USDT 实时预警系统</h1>
+    
+    <div class="price-display" id="priceDisplay">--.-- USDT</div>
+    
+    <div class="dashboard">
+      <div class="metrics">
+        <h2>实时数据</h2>
+        <div class="metric-item">
+          <span>当前时间：</span>
+          <span class="metric-value" id="time">--:--:--</span>
+        </div>
+        <div class="metric-item">
+          <span>当前价格：</span>
+          <span class="metric-value" id="price">--.--</span>
+        </div>
+        <div class="metric-item">
+          <span>24小时涨跌：</span>
+          <span class="metric-value" id="change">--.--%</span>
+        </div>
+        <div class="metric-item">
+          <span>24小时高/低：</span>
+          <span class="metric-value" id="highLow">--.-- / --.--</span>
+        </div>
+        <div class="metric-item">
+          <span>当前成交量：</span>
+          <span class="metric-value" id="volume">--</span>
+        </div>
+      </div>
+      
+      <div class="metrics">
+        <h2>技术指标</h2>
+        <div class="metric-item">
+          <span>平均成交量(20K线)：</span>
+          <span class="metric-value" id="avgVolume">--</span>
+        </div>
+        <div class="metric-item">
+          <span>MACD 金叉：</span>
+          <span class="metric-value" id="macd">--</span>
+        </div>
+        <div class="metric-item">
+          <span>KDJ 金叉：</span>
+          <span class="metric-value" id="kdj">--</span>
+        </div>
+        <div class="metric-item">
+          <span>是否放量：</span>
+          <span class="metric-value" id="volumeSpike">--</span>
+        </div>
+        <div class="metric-item">
+          <span>RSI(14)：</span>
+          <span class="metric-value" id="rsi">--</span>
+        </div>
+      </div>
     </div>
+    
     <div class="alert" id="alert"></div>
 
     <script>
+      const updatePriceDisplay = (price, change) => {
+        const priceDisplay = document.getElementById('priceDisplay');
+        priceDisplay.textContent = `${price} USDT`;
+        
+        if (change > 0) {
+          priceDisplay.className = 'price-display positive';
+        } else if (change < 0) {
+          priceDisplay.className = 'price-display negative';
+        } else {
+          priceDisplay.className = 'price-display';
+        }
+      };
+
       const fetchIndicators = async () => {
         const time = new Date().toLocaleTimeString();
         document.getElementById('time').textContent = time;
 
         try {
-          const res = await fetch(
+          // 获取实时价格数据
+          const priceRes = await fetch(
+            'https://api.taapi.io/bulk',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                secret: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbHVlIjoiNjgwMGI2NzM4MDZmZjE2NTFlNmM1NGUzIiwiaWF0IjoxNzQ0ODc3MzY3LCJleHAiOjMzMjQ5MzQxMzY3fQ.I4olPW4Y7hpXY6mZfwcbPQBz4rX9lHNb9c_bwRz8N0U',
+                construct: {
+                  exchange: 'binance',
+                  symbol: 'ETH/USDT',
+                  interval: '1h',
+                  indicators: [
+                    { indicator: 'price' },
+                    { indicator: 'change' },
+                    { indicator: 'high' },
+                    { indicator: 'low' },
+                    { indicator: 'volume' }
+                  ]
+                }
+              })
+            }
+          );
+          
+          // 获取技术指标数据
+          const indicatorsRes = await fetch(
             'https://api.taapi.io/bulk',
             {
               method: 'POST',
@@ -61,39 +182,70 @@
                     { indicator: 'macd' },
                     { indicator: 'kdj' },
                     { indicator: 'rma', optInTimePeriod: 20, indicatorName: 'volume' },
-                    { indicator: 'vwap' } // 取当前成交量
+                    { indicator: 'vwap' }, // 取当前成交量
+                    { indicator: 'rsi', optInTimePeriod: 14 }
                   ]
                 }
               })
             }
           );
-          const data = await res.json();
+          
+          const priceData = await priceRes.json();
+          const indicatorsData = await indicatorsRes.json();
+          
+          // 处理价格数据
+          const price = priceData.results[0].value.toFixed(2);
+          const change = priceData.results[1].value;
+          const high = priceData.results[2].value.toFixed(2);
+          const low = priceData.results[3].value.toFixed(2);
+          const currVol = priceData.results[4].value.toFixed(2);
+          
+          // 处理技术指标
+          const macdCross = indicatorsData.results[0].value.MACD > indicatorsData.results[0].value.signal;
+          const kdjCross = indicatorsData.results[1].value.k > indicatorsData.results[1].value.d;
+          const avgVol = indicatorsData.results[2].value.toFixed(2);
+          const minuteVol = indicatorsData.results[3].value.volume.toFixed(2);
+          const rsi = indicatorsData.results[4].value.toFixed(2);
+          
+          const isVolumeSpike = minuteVol > avgVol * 2;
 
-          const macdCross = data.results[0].value.MACD > data.results[0].value.signal;
-          const kdjCross = data.results[1].value.k > data.results[1].value.d;
-          const avgVol = data.results[2].value;
-          const currVol = data.results[3].value.volume;
-
-          const isVolumeSpike = currVol > avgVol * 2;
-
-          document.getElementById('volume').textContent = currVol.toFixed(2);
-          document.getElementById('avgVolume').textContent = avgVol.toFixed(2);
+          // 更新价格显示
+          updatePriceDisplay(price, change);
+          
+          // 更新实时数据
+          document.getElementById('price').textContent = price;
+          document.getElementById('change').textContent = `${change.toFixed(2)}%`;
+          document.getElementById('change').className = change >= 0 ? 'metric-value positive' : 'metric-value negative';
+          document.getElementById('highLow').textContent = `${high} / ${low}`;
+          document.getElementById('volume').textContent = currVol;
+          
+          // 更新技术指标
+          document.getElementById('avgVolume').textContent = avgVol;
           document.getElementById('macd').textContent = macdCross ? '是 ✅' : '否';
           document.getElementById('kdj').textContent = kdjCross ? '是 ✅' : '否';
           document.getElementById('volumeSpike').textContent = isVolumeSpike ? '是 ✅' : '否';
+          document.getElementById('rsi').textContent = rsi;
+          document.getElementById('rsi').className = 
+            rsi > 70 ? 'metric-value negative' : 
+            rsi < 30 ? 'metric-value positive' : 'metric-value';
 
+          // 预警逻辑
           if ((macdCross || kdjCross) && isVolumeSpike) {
-            document.getElementById('alert').textContent = '⚠️ 预警：金叉 + 放量！';
+            document.getElementById('alert').textContent = '⚠️ 预警：金叉 + 放量！潜在买入机会！';
+          } else if (rsi > 70) {
+            document.getElementById('alert').textContent = '⚠️ 预警：RSI超买(>70)，注意回调风险！';
+          } else if (rsi < 30) {
+            document.getElementById('alert').textContent = '⚠️ 预警：RSI超卖(<30)，潜在买入机会！';
           } else {
             document.getElementById('alert').textContent = '';
           }
         } catch (e) {
-          console.error(e);
+          console.error('API请求错误:', e);
         }
       };
 
       fetchIndicators();
-      setInterval(fetchIndicators, 1000);
+      setInterval(fetchIndicators, 60000); // 改为每分钟更新一次，避免API限制
     </script>
   </body>
 </html>
