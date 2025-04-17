@@ -153,6 +153,33 @@
       let lastPrice = null;
       const alertHistory = [];
 
+      // Telegram 配置（请替换为你的Bot Token和Chat ID）
+      const TELEGRAM_BOT_TOKEN = '7711127975:AAEqJxpp9cFFpd57VFM24OUd6F-VEpwgHvE'; // 替换为你的Bot Token，例如：6490145838:AAEurGwl5v56thGHTufPOFHG1jsTFLQ
+      const TELEGRAM_CHAT_ID = '7211993134';     // 替换为你的Chat ID，例如：123456789
+
+      // 发送消息到Telegram
+      const sendTelegramMessage = async (message) => {
+        try {
+          const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: TELEGRAM_CHAT_ID,
+              text: message,
+              parse_mode: 'Markdown',
+            }),
+          });
+          if (!response.ok) {
+            console.error('Telegram消息发送失败:', response.statusText);
+          }
+        } catch (e) {
+          console.error('Telegram消息发送错误:', e);
+        }
+      };
+
       // 计算EMA（用于MACD）
       const calculateEMA = (prices, period) => {
         const k = 2 / (period + 1);
@@ -233,7 +260,7 @@
         }
       };
 
-      // 更新报警记录
+      // 更新报警记录并推送至Telegram
       const updateAlertHistory = (message) => {
         const timestamp = new Date().toLocaleString();
         alertHistory.push({ timestamp, message });
@@ -247,25 +274,24 @@
             </div>
           `)
           .join('');
+
+        // 推送报警消息至Telegram
+        sendTelegramMessage(`${timestamp}\n${message}`);
       };
 
       // 获取实时价格和1小时涨跌
       const fetchRealTimePrice = async () => {
         try {
-          // 获取实时价格
           const priceResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT');
           const priceData = await priceResponse.json();
           const price = parseFloat(priceData.price).toFixed(2);
 
-          // 获取最近4根15分钟K线（1小时）
           const klineResponse = await fetch('https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=15m&limit=4');
           const klineData = await klineResponse.json();
-          const oneHourAgoPrice = parseFloat(klineData[0][4]); // 第一根K线的收盘价（1小时前）
+          const oneHourAgoPrice = parseFloat(klineData[0][4]);
 
-          // 计算1小时涨跌
           const change = ((price - oneHourAgoPrice) / oneHourAgoPrice * 100).toFixed(2);
 
-          // 更新价格显示
           updatePriceDisplay(price, change);
           document.getElementById('price').textContent = price;
           document.getElementById('change').textContent = `${change}%`;
@@ -375,7 +401,7 @@
 
           let alertMessage = '';
           if ((macdCrossOver || kdjCrossOver) && isVolumeSpike) {
-            alertMessage = '⚠️ 预警：金叉 + 放量！hrendential买入机会！';
+            alertMessage = '⚠️ 预警：金叉 + 放量！潜在买入机会！';
             document.getElementById('alert').textContent = alertMessage;
             updateAlertHistory(alertMessage);
           } else if (rsiValues[rsiValues.length - 1] > 70) {
