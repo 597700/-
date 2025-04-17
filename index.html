@@ -1,91 +1,99 @@
 <!DOCTYPE html>
 <html lang="zh">
-<head>
-  <meta charset="UTF-8">
-  <title>ETH 实时预警系统</title>
-  <style>
-    body {
-      background-color: #111;
-      color: #5fffe7;
-      font-family: Consolas, monospace;
-      padding: 30px;
-    }
-    h1 {
-      font-size: 24px;
-    }
-    .data-block {
-      background: #222;
-      border: 1px solid #333;
-      border-radius: 12px;
-      padding: 20px;
-      margin-top: 20px;
-      line-height: 1.6;
-    }
-    .highlight {
-      color: #ff5e5e;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <h1>ETH 实时预警系统</h1>
-  <div class="data-block" id="data"></div>
-
-  <script>
-    async function fetchIndicatorData() {
-      try {
-        const res = await fetch("https://api.taapi.io/bulk", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            secret: "YOUR_TAAPI_KEY",
-            construct: [
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "macd" },
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "kdj" },
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "vwap" },
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "rsi" },
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "sma", optInTimePeriod: 20 },
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "sma", optInTimePeriod: 7 },
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "sma", optInTimePeriod: 30 },
-              { exchange: "binance", symbol: "ETH/USDT", interval: "1m", indicator: "volume" }
-            ]
-          })
-        });
-
-        const result = await res.json();
-        const macd = result.results[0].value;
-        const kdj = result.results[1].value;
-        const volume = result.results[7].value;
-        const avgVol = result.results[4].value; // 20-period SMA as avg vol
-
-        const isMACDGolden = macd.MACD > macd.signal;
-        const isKDJGolden = kdj.k > kdj.d;
-        const isVolumeSpike = volume > avgVol * 2;
-
-        const now = new Date().toLocaleTimeString();
-
-        let html = `
-          <div>当前时间：${now}</div>
-          <div>当前成交量：${volume.toFixed(2)} ETH</div>
-          <div>平均成交量（20根K线）：${avgVol.toFixed(2)} ETH</div>
-          <div>MACD：DIF = ${macd.MACD.toFixed(4)}，DEA = ${macd.signal.toFixed(4)} ${isMACDGolden ? '<span class="highlight">（金叉 ✅）</span>' : ''}</div>
-          <div>KDJ：K = ${kdj.k.toFixed(2)}，D = ${kdj.d.toFixed(2)} ${isKDJGolden ? '<span class="highlight">（金叉 ✅）</span>' : ''}</div>
-        `;
-
-        if ((isMACDGolden || isKDJGolden) && isVolumeSpike) {
-          html += `<div class="highlight">⚠️ 警报：ETH 出现金叉 + 放量！已触发预警 🚨</div>`;
-        }
-
-        document.getElementById("data").innerHTML = html;
-      } catch (err) {
-        console.error("获取失败", err);
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ETH 实时预警系统</title>
+    <style>
+      body {
+        background-color: #111;
+        color: #0ff;
+        font-family: 'Arial', sans-serif;
+        padding: 20px;
       }
-    }
+      h1 {
+        color: #0ff;
+      }
+      .metrics {
+        margin-top: 20px;
+        font-size: 1.2em;
+        line-height: 1.8em;
+      }
+      .alert {
+        color: #f00;
+        font-weight: bold;
+        margin-top: 30px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ETH 实时预警系统</h1>
+    <div class="metrics">
+      <div>当前时间：<span id="time">--:--:--</span></div>
+      <div>当前成交量：<span id="volume">--</span></div>
+      <div>平均成交量（20根K线）：<span id="avgVolume">--</span></div>
+      <div>MACD 金叉：<span id="macd">--</span></div>
+      <div>KDJ 金叉：<span id="kdj">--</span></div>
+      <div>是否放量：<span id="volumeSpike">--</span></div>
+    </div>
+    <div class="alert" id="alert"></div>
 
-    setInterval(fetchIndicatorData, 1000); // 每秒刷新一次
-    fetchIndicatorData();
-  </script>
-</body>
+    <script>
+      const fetchIndicators = async () => {
+        const time = new Date().toLocaleTimeString();
+        document.getElementById('time').textContent = time;
+
+        try {
+          const res = await fetch(
+            'https://api.taapi.io/bulk',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                secret: 'YOUR_TAAPI_KEY',
+                construct: {
+                  exchange: 'binance',
+                  symbol: 'ETH/USDT',
+                  interval: '1m',
+                  indicators: [
+                    { indicator: 'macd' },
+                    { indicator: 'kdj' },
+                    { indicator: 'rma', optInTimePeriod: 20, indicatorName: 'volume' },
+                    { indicator: 'vwap' } // 取当前成交量
+                  ]
+                }
+              })
+            }
+          );
+          const data = await res.json();
+
+          const macdCross = data.results[0].value.MACD > data.results[0].value.signal;
+          const kdjCross = data.results[1].value.k > data.results[1].value.d;
+          const avgVol = data.results[2].value;
+          const currVol = data.results[3].value.volume;
+
+          const isVolumeSpike = currVol > avgVol * 2;
+
+          document.getElementById('volume').textContent = currVol.toFixed(2);
+          document.getElementById('avgVolume').textContent = avgVol.toFixed(2);
+          document.getElementById('macd').textContent = macdCross ? '是 ✅' : '否';
+          document.getElementById('kdj').textContent = kdjCross ? '是 ✅' : '否';
+          document.getElementById('volumeSpike').textContent = isVolumeSpike ? '是 ✅' : '否';
+
+          if ((macdCross || kdjCross) && isVolumeSpike) {
+            document.getElementById('alert').textContent = '⚠️ 预警：金叉 + 放量！';
+          } else {
+            document.getElementById('alert').textContent = '';
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      fetchIndicators();
+      setInterval(fetchIndicators, 1000);
+    </script>
+  </body>
 </html>
