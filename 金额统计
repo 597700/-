@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>特码投注统计工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        h1 { text-align: center; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #4CAF50; color: white; }
+        input { width: 80px; border: 1px solid #ccc; padding: 4px; text-align: right; }
+        .payout { font-weight: bold; color: #007bff; }
+        .warning { color: #ff0000; font-weight: bold; font-size: 18px; text-align: center; margin: 10px 0; }
+        .summary { background: #e9ecef; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        button { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <h1>特码投注统计工具</h1>
+    <p style="text-align: center;">赔率：47倍（含本金） | 资金池：10,000元 | 号码：1-49</p>
+    
+    <div class="summary">
+        <strong>总投注金额：</strong> <span id="totalBet">0</span> 元<br>
+        <button onclick="resetAll()">重置所有投注</button>
+    </div>
+    
+    <div id="warning" class="warning" style="display: none;">⚠️ 预警：某个号码赔付金额超过资金池（10,000元）！</div>
+    
+    <table id="betTable">
+        <thead>
+            <tr>
+                <th>号码</th>
+                <th>赔率</th>
+                <th>投注金额 (元)</th>
+                <th>赔付金额 (元)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- 动态生成 -->
+        </tbody>
+    </table>
+
+    <script>
+        const odds = 47; // 赔率
+        const pool = 10000; // 资金池
+        const betLimit = 10000; // 单号码投注限额（保留原逻辑，但预警改为赔付）
+        const numbers = Array.from({length: 49}, (_, i) => i + 1);
+
+        // 生成表格行
+        function generateTable() {
+            const tbody = document.querySelector('#betTable tbody');
+            tbody.innerHTML = '';
+            numbers.forEach(num => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${num}</td>
+                    <td>${odds}</td>
+                    <td><input type="number" min="0" step="1" value="0" onchange="calculateTotals()" oninput="calculateTotals()"></td>
+                    <td class="payout" id="payout_${num}">0</td>
+                `;
+            });
+            calculateTotals(); // 初始计算
+        }
+
+        // 计算总投注
+        function calculateTotals() {
+            let totalBet = 0;
+            let hasWarning = false;
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach((input, index) => {
+                const bet = parseFloat(input.value) || 0;
+                const num = numbers[index];
+                const payout = bet * odds;
+                document.getElementById(`payout_${num}`).textContent = payout.toFixed(2);
+                totalBet += bet;
+                if (payout > pool) {
+                    hasWarning = true;
+                }
+            });
+
+            document.getElementById('totalBet').textContent = totalBet.toFixed(2);
+
+            const warning = document.getElementById('warning');
+            if (hasWarning) {
+                warning.style.display = 'block';
+            } else {
+                warning.style.display = 'none';
+            }
+        }
+
+        // 重置所有投注
+        function resetAll() {
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                input.value = 0;
+            });
+            calculateTotals();
+        }
+
+        // 初始化
+        generateTable();
+    </script>
+</body>
+</html>
