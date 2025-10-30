@@ -1,434 +1,106 @@
 <!DOCTYPE html>
-<html lang="zh">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ETH 实时预警系统</title>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>特码投注统计工具</title>
     <style>
-      body {
-        background-color: #111;
-        color: #0ff;
-        font-family: 'Arial', sans-serif;
-        padding: 20px;
-      }
-      h1 {
-        color: #0ff;
-        text-align: center;
-        margin-bottom: 30px;
-      }
-      .dashboard {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-      }
-      .metrics {
-        background-color: #222;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
-      }
-      .metric-item {
-        margin: 15px 0;
-        font-size: 1.1em;
-        display: flex;
-        justify-content: space-between;
-      }
-      .metric-value {
-        font-weight: bold;
-      }
-      .positive {
-        color: #0f0;
-      }
-      .negative {
-        color: #f00;
-      }
-      .alert {
-        color: #f00;
-        font-weight: bold;
-        margin-top: 30px;
-        text-align: center;
-        font-size: 1.3em;
-        animation: blink 1s infinite;
-      }
-      @keyframes blink {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-      }
-      .price-display {
-        font-size: 2em;
-        text-align: center;
-        margin: 20px 0;
-      }
-      .alert-history {
-        margin-top: 40px;
-        background-color: #222;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
-      }
-      .alert-history h2 {
-        color: #0ff;
-        margin-bottom: 15px;
-      }
-      .alert-history-item {
-        padding: 10px;
-        border-bottom: 1px solid #444;
-        font-size: 1em;
-        display: flex;
-        justify-content: space-between;
-      }
-      .alert-history-item:last-child {
-        border-bottom: none;
-      }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        h1 { text-align: center; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #4CAF50; color: white; }
+        input { width: 80px; border: 1px solid #ccc; padding: 4px; text-align: right; }
+        .payout { font-weight: bold; color: #007bff; }
+        .warning { color: #ff0000; font-weight: bold; font-size: 18px; text-align: center; margin: 10px 0; }
+        .summary { background: #e9ecef; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        button { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #45a049; }
     </style>
-  </head>
-  <body>
-    <h1>ETH/USDT 实时预警系统</h1>
+</head>
+<body>
+    <h1>特码投注统计工具</h1>
+    <p style="text-align: center;">赔率：47倍（含本金） | 资金池：10,000元 | 号码：1-49</p>
     
-    <div class="price-display" id="priceDisplay">--.-- USDT</div>
-    
-    <div class="dashboard">
-      <div class="metrics">
-        <h2>实时数据</h2>
-        <div class="metric-item">
-          <span>当前时间：</span>
-          <span class="metric-value" id="time">--:--:--</span>
-        </div>
-        <div class="metric-item">
-          <span>当前价格：</span>
-          <span class="metric-value" id="price">--.--</span>
-        </div>
-        <div class="metric-item">
-          <span>1小时涨跌：</span>
-          <span class="metric-value" id="change">--.--%</span>
-        </div>
-        <div class="metric-item">
-          <span>24小时高/低：</span>
-          <span class="metric-value" id="highLow">--.-- / --.--</span>
-        </div>
-        <div class="metric-item">
-          <span>当前成交量：</span>
-          <span class="metric-value" id="volume">--</span>
-        </div>
-      </div>
-      
-      <div class="metrics">
-        <h2>技术指标</h2>
-        <div class="metric-item">
-          <span>平均成交量(20K线)：</span>
-          <span class="metric-value" id="avgVolume">--</span>
-        </div>
-        <div class="metric-item">
-          <span>MACD 金叉/死叉：</span>
-          <span class="metric-value" id="macd">--</span>
-        </div>
-        <div class="metric-item">
-          <span>KDJ 金叉/死叉：</span>
-          <span class="metric-value" id="kdj">--</span>
-        </div>
-        <div class="metric-item">
-          <span>是否放量：</span>
-          <span class="metric-value" id="volumeSpike">--</span>
-        </div>
-        <div class="metric-item">
-          <span>RSI(14)：</span>
-          <span class="metric-value" id="rsi">--</span>
-        </div>
-      </div>
+    <div class="summary">
+        <strong>总投注金额：</strong> <span id="totalBet">0</span> 元<br>
+        <button onclick="resetAll()">重置所有投注</button>
     </div>
     
-    <div class="alert" id="alert"></div>
-
-    <div class="alert-history" id="alertHistory">
-      <h2>报警记录</h2>
-      <div id="alertHistoryItems"></div>
-    </div>
+    <div id="warning" class="warning" style="display: none;">⚠️ 预警：某个号码赔付金额超过资金池（10,000元）！</div>
+    
+    <table id="betTable">
+        <thead>
+            <tr>
+                <th>号码</th>
+                <th>赔率</th>
+                <th>投注金额 (元)</th>
+                <th>赔付金额 (元)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- 动态生成 -->
+        </tbody>
+    </table>
 
     <script>
-      let prevMacd = null, prevSignal = null;
-      let prevK = null, prevD = null;
-      let lastDataTimestamp = null;
-      let cachedData = null;
-      let lastPrice = null;
-      const alertHistory = [];
+        const odds = 47; // 赔率
+        const pool = 10000; // 资金池
+        const betLimit = 10000; // 单号码投注限额（保留原逻辑，但预警改为赔付）
+        const numbers = Array.from({length: 49}, (_, i) => i + 1);
 
-      // Telegram 配置（请替换为你的Bot Token和Chat ID）
-      const TELEGRAM_BOT_TOKEN = '7711127975:AAEqJxpp9cFFpd57VFM24OUd6F-VEpwgHvE'; // 替换为你的Bot Token，例如：6490145838:AAEurGwl5v56thGHTufPOFHG1jsTFLQ
-      const TELEGRAM_CHAT_ID = '7211993134';     // 替换为你的Chat ID，例如：123456789
-
-      // 发送消息到Telegram
-      const sendTelegramMessage = async (message) => {
-        try {
-          const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              chat_id: TELEGRAM_CHAT_ID,
-              text: message,
-              parse_mode: 'Markdown',
-            }),
-          });
-          if (!response.ok) {
-            console.error('Telegram消息发送失败:', response.statusText);
-          }
-        } catch (e) {
-          console.error('Telegram消息发送错误:', e);
+        // 生成表格行
+        function generateTable() {
+            const tbody = document.querySelector('#betTable tbody');
+            tbody.innerHTML = '';
+            numbers.forEach(num => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${num}</td>
+                    <td>${odds}</td>
+                    <td><input type="number" min="0" step="1" value="0" onchange="calculateTotals()" oninput="calculateTotals()"></td>
+                    <td class="payout" id="payout_${num}">0</td>
+                `;
+            });
+            calculateTotals(); // 初始计算
         }
-      };
 
-      // 计算EMA（用于MACD）
-      const calculateEMA = (prices, period) => {
-        const k = 2 / (period + 1);
-        let ema = prices[0];
-        const emaArray = [ema];
-        for (let i = 1; i < prices.length; i++) {
-          ema = prices[i] * k + ema * (1 - k);
-          emaArray.push(ema);
-        }
-        return emaArray;
-      };
+        // 计算总投注
+        function calculateTotals() {
+            let totalBet = 0;
+            let hasWarning = false;
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach((input, index) => {
+                const bet = parseFloat(input.value) || 0;
+                const num = numbers[index];
+                const payout = bet * odds;
+                document.getElementById(`payout_${num}`).textContent = payout.toFixed(2);
+                totalBet += bet;
+                if (payout > pool) {
+                    hasWarning = true;
+                }
+            });
 
-      // 计算MACD
-      const calculateMACD = (closePrices) => {
-        const ema12 = calculateEMA(closePrices, 12);
-        const ema26 = calculateEMA(closePrices, 26);
-        const macd = [];
-        for (let i = 0; i < closePrices.length; i++) {
-          macd.push(ema12[i] - ema26[i]);
-        }
-        const signal = calculateEMA(macd, 9);
-        return { macd, signal };
-      };
+            document.getElementById('totalBet').textContent = totalBet.toFixed(2);
 
-      // 计算KDJ
-      const calculateKDJ = (highPrices, lowPrices, closePrices, period = 9) => {
-        const kArray = [];
-        const dArray = [];
-        for (let i = period - 1; i < closePrices.length; i++) {
-          const high = Math.max(...highPrices.slice(i - period + 1, i + 1));
-          const low = Math.min(...lowPrices.slice(i - period + 1, i + 1));
-          const rsv = ((closePrices[i] - low) / (high - low)) * 100 || 0;
-          const k = (2 / 3) * (kArray.length ? kArray[kArray.length - 1] : 50) + (1 / 3) * rsv;
-          const d = (2 / 3) * (dArray.length ? dArray[dArray.length - 1] : 50) + (1 / 3) * k;
-          kArray.push(k);
-          dArray.push(d);
-        }
-        const jArray = kArray.map((k, i) => 3 * k - 2 * dArray[i]);
-        return { k: kArray, d: dArray, j: jArray };
-      };
-
-      // 计算RSI
-      const calculateRSI = (closePrices, period = 14) => {
-        const changes = [];
-        for (let i = 1; i < closePrices.length; i++) {
-          changes.push(closePrices[i] - closePrices[i - 1]);
-        }
-        let avgGain = 0, avgLoss = 0;
-        for (let i = 0; i < period; i++) {
-          const change = changes[i];
-          if (change > 0) avgGain += change;
-          else avgLoss += Math.abs(change);
-        }
-        avgGain /= period;
-        avgLoss /= period;
-        const rsiArray = [];
-        for (let i = period; i < changes.length; i++) {
-          const change = changes[i];
-          avgGain = (avgGain * (period - 1) + (change > 0 ? change : 0)) / period;
-          avgLoss = (avgLoss * (period - 1) + (change < 0 ? Math.abs(change) : 0)) / period;
-          const rs = avgGain / (avgLoss || 1);
-          const rsi = 100 - (100 / (1 + rs));
-          rsiArray.push(rsi);
-        }
-        return rsiArray;
-      };
-
-      const updatePriceDisplay = (price, change) => {
-        const priceDisplay = document.getElementById('priceDisplay');
-        priceDisplay.textContent = `${price} USDT`;
-        
-        if (change > 0) {
-          priceDisplay.className = 'price-display positive';
-        } else if (change < 0) {
-          priceDisplay.className = 'price-display negative';
-        } else {
-          priceDisplay.className = 'price-display';
-        }
-      };
-
-      // 更新报警记录并推送至Telegram
-      const updateAlertHistory = (message) => {
-        const timestamp = new Date().toLocaleString();
-        alertHistory.push({ timestamp, message });
-        
-        const alertHistoryItems = document.getElementById('alertHistoryItems');
-        alertHistoryItems.innerHTML = alertHistory
-          .map(item => `
-            <div class="alert-history-item">
-              <span>${item.timestamp}</span>
-              <span>${item.message}</span>
-            </div>
-          `)
-          .join('');
-
-        // 推送报警消息至Telegram
-        sendTelegramMessage(`${timestamp}\n${message}`);
-      };
-
-      // 获取实时价格和1小时涨跌
-      const fetchRealTimePrice = async () => {
-        try {
-          const priceResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT');
-          const priceData = await priceResponse.json();
-          const price = parseFloat(priceData.price).toFixed(2);
-
-          const klineResponse = await fetch('https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=15m&limit=4');
-          const klineData = await klineResponse.json();
-          const oneHourAgoPrice = parseFloat(klineData[0][4]);
-
-          const change = ((price - oneHourAgoPrice) / oneHourAgoPrice * 100).toFixed(2);
-
-          updatePriceDisplay(price, change);
-          document.getElementById('price').textContent = price;
-          document.getElementById('change').textContent = `${change}%`;
-          document.getElementById('change').className = change >= 0 ? 'metric-value positive' : 'metric-value negative';
-        } catch (e) {
-          console.error('实时价格请求错误:', e);
-          document.getElementById('alert').textContent = '⚠️ 实时价格请求失败，请检查网络！';
-          updateAlertHistory('实时价格请求失败，请检查网络！');
-        }
-      };
-
-      const fetchIndicators = async () => {
-        const time = new Date().toLocaleTimeString();
-        document.getElementById('time').textContent = time;
-
-        try {
-          const response = await fetch(
-            'https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=15m&limit=100'
-          );
-          const data = await response.json();
-
-          const currentTimestamp = data[data.length - 1][0];
-          if (lastDataTimestamp === currentTimestamp && cachedData) {
-            const { high, low, currVol, macd, signal, k, d, rsiValues, avgVol, minuteVol } = cachedData;
-            
-            const macdCrossOver = prevMacd !== null && prevMacd < prevSignal && macd[macd.length - 1] > signal[signal.length - 1];
-            const macdCrossUnder = prevMacd !== null && prevMacd > prevSignal && macd[macd.length - 1] < signal[signal.length - 1];
-            const kdjCrossOver = prevK !== null && prevK < prevD && k[k.length - 1] > d[d.length - 1];
-            const kdjCrossUnder = prevK !== null && prevK > prevD && k[k.length - 1] < d[d.length - 1];
-            const isVolumeSpike = minuteVol > avgVol;
-
-            prevMacd = macd[macd.length - 1];
-            prevSignal = signal[signal.length - 1];
-            prevK = k[k.length - 1];
-            prevD = d[d.length - 1];
-
-            document.getElementById('highLow').textContent = `${high} / ${low}`;
-            document.getElementById('volume').textContent = currVol;
-            document.getElementById('avgVolume').textContent = avgVol.toFixed(2);
-            document.getElementById('macd').textContent = macdCrossOver ? '金叉 ✅' : macdCrossUnder ? '死叉 ❌' : '否';
-            document.getElementById('kdj').textContent = kdjCrossOver ? '金叉 ✅' : kdjCrossUnder ? '死叉 ❌' : '否';
-            document.getElementById('volumeSpike').textContent = isVolumeSpike ? '是 ✅' : '否';
-            document.getElementById('rsi').textContent = rsiValues[rsiValues.length - 1].toFixed(2);
-            document.getElementById('rsi').className = 
-              rsiValues[rsiValues.length - 1] > 70 ? 'metric-value negative' : 
-              rsiValues[rsiValues.length - 1] < 30 ? 'metric-value positive' : 'metric-value';
-
-            let alertMessage = '';
-            if ((macdCrossOver || kdjCrossOver) && isVolumeSpike) {
-              alertMessage = '⚠️ 预警：金叉 + 放量！潜在买入机会！';
-              document.getElementById('alert').textContent = alertMessage;
-              updateAlertHistory(alertMessage);
-            } else if (rsiValues[rsiValues.length - 1] > 70) {
-              alertMessage = '⚠️ 预警：RSI超买(>70)，注意回调风险！';
-              document.getElementById('alert').textContent = alertMessage;
-              updateAlertHistory(alertMessage);
-            } else if (rsiValues[rsiValues.length - 1] < 30) {
-              alertMessage = '⚠️ 预警：RSI超卖(<30)，潜在买入机会！';
-              document.getElementById('alert').textContent = alertMessage;
-              updateAlertHistory(alertMessage);
+            const warning = document.getElementById('warning');
+            if (hasWarning) {
+                warning.style.display = 'block';
             } else {
-              document.getElementById('alert').textContent = '';
+                warning.style.display = 'none';
             }
-            return;
-          }
-
-          lastDataTimestamp = currentTimestamp;
-
-          const closePrices = data.map(candle => parseFloat(candle[4]));
-          const highPrices = data.map(candle => parseFloat(candle[2]));
-          const lowPrices = data.map(candle => parseFloat(candle[3]));
-          const volumes = data.map(candle => parseFloat(candle[5]));
-
-          const high = Math.max(...highPrices.slice(-96)).toFixed(2);
-          const low = Math.min(...lowPrices.slice(-96)).toFixed(2);
-          const currVol = volumes[volumes.length - 1].toFixed(2);
-
-          const { macd, signal } = calculateMACD(closePrices);
-          const { k, d } = calculateKDJ(highPrices, lowPrices, closePrices);
-          const rsiValues = calculateRSI(closePrices);
-          const avgVol = volumes.slice(-21, -1).reduce((sum, v) => sum + v, 0) / 20;
-          const minuteVol = volumes[volumes.length - 1];
-
-          const macdCrossOver = prevMacd !== null && prevMacd < prevSignal && macd[macd.length - 1] > signal[signal.length - 1];
-          const macdCrossUnder = prevMacd !== null && prevMacd > prevSignal && macd[macd.length - 1] < signal[signal.length - 1];
-          const kdjCrossOver = prevK !== null && prevK < prevD && k[k.length - 1] > d[d.length - 1];
-          const kdjCrossUnder = prevK !== null && prevK > prevD && k[k.length - 1] < d[d.length - 1];
-          const isVolumeSpike = minuteVol > avgVol;
-
-          prevMacd = macd[macd.length - 1];
-          prevSignal = signal[signal.length - 1];
-          prevK = k[k.length - 1];
-          prevD = d[d.length - 1];
-
-          cachedData = { high, low, currVol, macd, signal, k, d, rsiValues, avgVol, minuteVol };
-
-          document.getElementById('highLow').textContent = `${high} / ${low}`;
-          document.getElementById('volume').textContent = currVol;
-          document.getElementById('avgVolume').textContent = avgVol.toFixed(2);
-          document.getElementById('macd').textContent = macdCrossOver ? '金叉 ✅' : macdCrossUnder ? '死叉 ❌' : '否';
-          document.getElementById('kdj').textContent = kdjCrossOver ? '金叉 ✅' : kdjCrossUnder ? '死叉 ❌' : '否';
-          document.getElementById('volumeSpike').textContent = isVolumeSpike ? '是 ✅' : '否';
-          document.getElementById('rsi').textContent = rsiValues[rsiValues.length - 1].toFixed(2);
-          document.getElementById('rsi').className = 
-            rsiValues[rsiValues.length - 1] > 70 ? 'metric-value negative' : 
-            rsiValues[rsiValues.length - 1] < 30 ? 'metric-value positive' : 'metric-value';
-
-          let alertMessage = '';
-          if ((macdCrossOver || kdjCrossOver) && isVolumeSpike) {
-            alertMessage = '⚠️ 预警：金叉 + 放量！潜在买入机会！';
-            document.getElementById('alert').textContent = alertMessage;
-            updateAlertHistory(alertMessage);
-          } else if (rsiValues[rsiValues.length - 1] > 70) {
-            alertMessage = '⚠️ 预警：RSI超买(>70)，注意回调风险！';
-            document.getElementById('alert').textContent = alertMessage;
-            updateAlertHistory(alertMessage);
-          } else if (rsiValues[rsiValues.length - 1] < 30) {
-            alertMessage = '⚠️ 预警：RSI超卖(<30)，潜在买入机会！';
-            document.getElementById('alert').textContent = alertMessage;
-            updateAlertHistory(alertMessage);
-          } else {
-            document.getElementById('alert').textContent = '';
-          }
-        } catch (e) {
-          console.error('API请求错误:', e);
-          document.getElementById('alert').textContent = '⚠️ API请求失败，请检查网络或稍后重试！';
-          updateAlertHistory('API请求失败，请检查网络或稍后重试！');
         }
-      };
 
-      // 初始加载
-      fetchRealTimePrice();
-      fetchIndicators();
+        // 重置所有投注
+        function resetAll() {
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                input.value = 0;
+            });
+            calculateTotals();
+        }
 
-      // 定时刷新
-      setInterval(fetchRealTimePrice, 1000);
-      setInterval(fetchIndicators, 15000);
+        // 初始化
+        generateTable();
     </script>
-  </body>
+</body>
 </html>
