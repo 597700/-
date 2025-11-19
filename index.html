@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>特码投注统计工具（2025生肖版 + 灵活输入）</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 10px; background-color: #f5f5f5; font-size: 12px; }
+h1 { text-align: center; color: #333; font-size: 18px; margin: 10px 0; }
+.container { display: flex; flex-wrap: wrap; gap: 10px; }
+.table-wrapper { flex: 1; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+th, td { border: 1px solid #ddd; padding: 4px; text-align: center; font-size: 11px; }
+th { background-color: #4CAF50; color: white; }
+input, select { border: 1px solid #ccc; padding: 4px; font-size: 12px; }
+.payout { font-weight: bold; color: #007bff; }
+.payout.over { color: #ff0000; }
+.warning { color: #ff0000; font-weight: bold; font-size: 14px; text-align: center; margin: 5px 0; }
+.summary { background: #e9ecef; padding: 8px; border-radius: 5px; margin: 10px 0; font-size: 12px; }
+button { background: #4CAF50; color: white; padding: 6px 12px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; margin: 2px; }
+button:hover { background: #45a049; }
+#zodiacInput, #amountInput, #batchInput { width: 150px; margin-right:4px; }
+.zodiac-box { background: #fff3cd; padding: 8px; border-radius: 5px; margin: 10px 0; font-size: 13px; }
+.zodiac-label { color:#d63384; font-weight:bold; }
+</style>
+</head>
+<body>
+<h1>特码投注统计工具（2025生肖版）</h1>
+<p style="text-align: center; font-size: 11px; margin: 5px 0;">赔率：47倍（含本金） | 资金池：10,000元 | 号码：1-49</p>
+
+<!-- 生肖快速加注区 -->
+<div class="zodiac-box">
+<strong>生肖快速加注</strong><br>
+<input type="text" id="zodiacInput" placeholder="输入生肖 中文或拼音，例如：猪 羊 牛 鸡"/>
+<input type="number" id="amountInput" placeholder="金额"/>
+<button onclick="zodiacBet()">加注</button>
+<span class="zodiac-label" id="zodiacResult"></span>
+</div>
+
+<div class="summary">
+<strong>总投注金额：</strong> <span id="totalBet">0</span> 元<br>
+<strong>平均投注金额：</strong> <span id="avgBet">0</span> 元<br>
+<input type="text" id="batchInput" placeholder="批量输入号码，例如：01 02 03 04 50"/>
+<button onclick="addBatchBet()">批量加注</button>
+<button onclick="resetAll()">重置</button>
+</div>
+
+<div id="warning" class="warning" style="display: none;">⚠️ 某个号码赔付金额超过资金池！</div>
+
+<div class="container">
+<div class="table-wrapper">
+<h3 style="text-align: center; font-size: 12px; margin: 5px 0;">号码 1-24（带生肖）</h3>
+<table id="betTableLeft">
+<thead>
+<tr>
+<th>号码（生肖）</th><th>赔率</th><th>投注金额</th><th>赔付金额</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+<div class="table-wrapper">
+<h3 style="text-align: center; font-size: 12px; margin: 5px 0;">号码 25-49（带生肖）</h3>
+<table id="betTableRight">
+<thead>
+<tr>
+<th>号码（生肖）</th><th>赔率</th><th>投注金额</th><th>赔付金额</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+
+<script>
+const odds = 47;
+const pool = 10000;
+const numbers = Array.from({length:49},(_,i)=>i+1);
+
+// 生肖对应
+const zodiac2025 = {
+"鼠":["06","18","30","42"],"牛":["05","17","29","41"],"虎":["04","16","28","40"],
+"兔":["03","15","27","39"],"龙":["02","14","26","38"],"蛇":["01","13","25","37","49"],
+"马":["12","24","36","48"],"羊":["11","23","35","47"],"猴":["10","22","34","46"],
+"鸡":["09","21","33","45"],"狗":["08","20","32","44"],"猪":["07","19","31","43"]
+};
+
+// 拼音映射
+const zodiacAliases = {
+"shu":"鼠","niu":"牛","hu":"虎","tu":"兔","long":"龙","she":"蛇",
+"ma":"马","yang":"羊","hou":"猴","ji":"鸡","gou":"狗","zhu":"猪"
+};
+
+// 号码→生肖
+const numToZodiac = {};
+Object.keys(zodiac2025).forEach(z=>{
+zodiac2025[z].forEach(n=>numToZodiac[n]=z);
+});
+
+// 表格生成
+function generateTable(tableId,numArray){
+    const tbody = document.querySelector(`#${tableId} tbody`);
+    tbody.innerHTML='';
+    numArray.forEach(num=>{
+        const padded=num.toString().padStart(2,'0');
+        const zodiac=numToZodiac[padded]||'';
+        const row = tbody.insertRow();
+        row.innerHTML=`
+        <td><strong>${padded}</strong>${zodiac?' ('+zodiac+')':''}</td>
+        <td>${odds}</td>
+        <td><input type="number" min="0" step="1" value="0" onchange="calculateTotals()" oninput="calculateTotals()"></td>
+        <td class="payout" id="payout_${num}">0.00</td>
+        `;
+    });
+}
+
+// 生肖加注（灵活输入）
+function zodiacBet(){
+    let raw = document.getElementById('zodiacInput').value.trim().toLowerCase();
+    const amount = parseFloat(document.getElementById('amountInput').value);
+    if (!amount || amount <= 0) { alert('请输入有效金额'); return; }
+
+    raw = raw.replace(/[。，]/g,' '); // 中文标点替换为空格
+    let parts = raw.includes(' ') ? raw.split(/\s+/) : raw.split(''); // 拆分字符
+    let numsToBet = [];
+    parts.forEach(z=>{
+        if(!z) return;
+        if(zodiac2025[z]) numsToBet.push(...zodiac2025[z]);
+        else if(zodiacAliases[z]) numsToBet.push(...zodiac2025[zodiacAliases[z]]);
+    });
+    numsToBet = [...new Set(numsToBet)];
+    if(numsToBet.length===0){ alert('未识别生肖'); return; }
+
+    document.getElementById('zodiacResult').textContent = `给 ${numsToBet.join(' ')} 各加 ${amount} 元`;
+
+    const inputMap = {};
+    numbers.forEach(num=>{
+        const cell=document.getElementById(`payout_${num}`);
+        if(cell) inputMap[num.toString().padStart(2,'0')]=cell.closest('tr').querySelector('input[type="number"]');
+    });
+    numsToBet.forEach(n=>{
+        if(inputMap[n]){
+            const cur=parseFloat(inputMap[n].value)||0;
+            inputMap[n].value=(cur+amount).toFixed(2);
+        }
+    });
+    calculateTotals();
+    document.getElementById('zodiacInput').value='';
+    document.getElementById('amountInput').value='';
+}
+
+// 批量加注（数字灵活输入）
+function addBatchBet(){
+    let raw = document.getElementById('batchInput').value.trim();
+    const amountMatch = raw.match(/\d+$/);
+    if(!amountMatch){ alert('请输入有效金额'); return; }
+    const amount=parseFloat(amountMatch[0]);
+    if(!amount || amount <= 0){ alert('金额无效'); return; }
+
+    raw = raw.replace(/\d+$/,'').replace(/[。，]/g,' ').trim();
+
+    let parts = raw.includes(' ') ? raw.split(/\s+/) : raw.match(/\d{2}/g);
+    if(!parts || parts.length===0){ alert('没有有效号码'); return; }
+
+    const nums=parts.map(n=>{
+        const num=parseInt(n);
+        if(isNaN(num)||num<1||num>49) return null;
+        return num.toString().padStart(2,'0');
+    }).filter(n=>n!==null);
+    if(nums.length===0){ alert('没有有效号码'); return; }
+
+    const inputMap={};
+    numbers.forEach(num=>{
+        const cell=document.getElementById(`payout_${num}`);
+        if(cell) inputMap[num.toString().padStart(2,'0')]=cell.closest('tr').querySelector('input[type="number"]');
+    });
+    nums.forEach(n=>{
+        if(inputMap[n]){
+            const cur=parseFloat(inputMap[n].value)||0;
+            inputMap[n].value=(cur+amount).toFixed(2);
+        }
+    });
+    document.getElementById('batchInput').value='';
+    calculateTotals();
+}
+
+// 计算总额和赔付
+function calculateTotals(){
+    let totalBet=0,hasWarning=false;
+    numbers.forEach(num=>{
+        const cell=document.getElementById(`payout_${num}`);
+        const inputEl=cell.closest('tr').querySelector('input[type="number"]');
+        const bet=parseFloat(inputEl.value)||0;
+        const payout=bet*odds;
+        cell.textContent=payout.toFixed(2);
+        if(payout>pool) cell.classList.add('over'); else cell.classList.remove('over');
+        totalBet+=bet;
+        if(payout>pool) hasWarning=true;
+    });
+    document.getElementById('totalBet').textContent=totalBet.toFixed(2);
+    document.getElementById('avgBet').textContent=(totalBet/49).toFixed(2);
+    document.getElementById('warning').style.display=hasWarning?'block':'none';
+}
+
+// 重置
+function resetAll(){
+    document.querySelectorAll('input[type="number"]').forEach(i=>i.value=0);
+    document.getElementById('batchInput').value='';
+    document.getElementById('zodiacInput').value='';
+    document.getElementById('amountInput').value='';
+    document.getElementById('zodiacResult').textContent='';
+    calculateTotals();
+}
+
+// 初始化
+generateTable('betTableLeft',numbers.slice(0,24));
+generateTable('betTableRight',numbers.slice(24));
+calculateTotals();
+</script>
+</body>
+</html>
